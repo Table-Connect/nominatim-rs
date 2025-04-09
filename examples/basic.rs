@@ -1,4 +1,4 @@
-use nominatim::{Client, IdentificationMethod};
+use tc_nominatim::{Client, IdentificationMethod};
 
 #[tokio::main]
 async fn main() {

@@ -1,9 +1,9 @@
 [package]
-name = "nominatim"
+name = "tc_nominatim"
 version = "0.3.5"
 edition = "2021"
-authors = ["Grant Handy <granthandy@proton.me>"]
-repository = "https://github.com/grantshandy/nominatim-rs"
+authors = ["Cristian Giehl <cristiangiehl@gmail.com>"]
+repository = "https://github.com/Table-Connect/nominatim-rs"
 documentation = "https://docs.rs/nominatim"
 description = "Bindings to the reverse geocoding API powered by openstreetmap."
 keywords = ["async", "coordinates", "nominatim", "geocoding", "location"]
