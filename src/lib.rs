@@ -1,5 +1,3 @@
-#![doc = include_str!("../README.md")]
-
 use std::{str::FromStr, time::Duration};
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -73,9 +71,54 @@ impl Client {
     pub async fn search(&self, query: impl AsRef<str>) -> Result<Vec<Place>, reqwest::Error> {
         let mut url = self.base_url.clone();
         url.set_query(Some(&format!(
-            "addressdetails=1&extratags=1&q={}&format=json",
+            "addressdetails=1&extratags=1&q={}&format=json&polygon_geojson=1",
             query.as_ref().replace(' ', "+")
         )));
+
+        let mut headers = HeaderMap::new();
+        headers.append(
+            HeaderName::from_str(&self.ident.header()).expect("invalid nominatim auth header name"),
+            HeaderValue::from_str(&self.ident.value())
+                .expect("invalid nominatim auth header value"),
+        );
+
+        self.client
+            .get(url)
+            .headers(headers)
+            .timeout(self.timeout)
+            .send()
+            .await?
+            .json()
+            .await
+    }
+
+    pub async fn search_structured(
+        &self,
+        params: &SearchStructuredParams,
+    ) -> Result<Vec<Place>, reqwest::Error> {
+        let mut url = self.base_url.clone();
+
+        // Build the query string with structured parameters
+        let mut query_parts = Vec::new();
+
+        query_parts.push(format!("country={}", urlencoding::encode(&params.country)));
+        query_parts.push(format!("state={}", urlencoding::encode(&params.state)));
+
+        if let Some(city) = params.city.as_ref() {
+            query_parts.push(format!("city={}", urlencoding::encode(city)));
+        }
+
+        if let Some(postal_code) = params.postal_code.as_ref() {
+            query_parts.push(format!("postalcode={}", urlencoding::encode(postal_code)));
+        }
+
+        // Add other default parameters (addressdetails, format, etc.)
+        query_parts.push("format=json".to_string());
+        query_parts.push("addressdetails=true".to_string());
+        query_parts.push("extratags=true".to_string());
+        query_parts.push("polygon_geojson=true".to_string());
+
+        url.set_query(Some(&query_parts.join("&")));
 
         let mut headers = HeaderMap::new();
         headers.append(
@@ -170,6 +213,14 @@ impl Client {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SearchStructuredParams {
+    pub country: String,
+    pub state: String,
+    pub city: Option<String>,
+    pub postal_code: Option<String>,
+}
+
 /// The status of a Nominatim server.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Status {
@@ -178,6 +229,30 @@ pub struct Status {
     pub data_updated: Option<String>,
     pub software_version: Option<String>,
     pub database_version: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum GeoJsonType {
+    Point,
+    LineString,
+    Polygon,
+    MultiPolygon,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum Coordinates {
+    Point([f64; 2]),
+    LineString(Vec<[f64; 2]>),
+    Polygon(Vec<Vec<[f64; 2]>>),
+    MultiPolygon(Vec<Vec<Vec<[f64; 2]>>>),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GeoJson {
+    #[serde(rename = "type")]
+    pub geo_type: GeoJsonType,
+    pub coordinates: Coordinates,
 }
 
 /// A location returned by the Nominatim server.
@@ -207,6 +282,8 @@ pub struct Place {
     #[serde(default)]
     pub address: Option<Address>,
     pub extratags: Option<ExtraTags>,
+    pub geojson: Option<GeoJson>,
+    pub name: Option<String>,
 }
 
 /// An address for a place.
